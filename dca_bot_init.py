@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from paloma_sdk.client.lcd import AsyncLCDClient
 from paloma_sdk.key.mnemonic import MnemonicKey
 
+
 async def pancakeswap_bot():
     node: str = os.environ['BNB_NODE']
     w3: Web3 = Web3(Web3.HTTPProvider(node))
@@ -21,9 +22,10 @@ async def pancakeswap_bot():
     wallet = paloma.wallet(acct)
     dca_sc: Contract = w3.eth.contract(address=dca_bot_address, abi=dca_bot_abi)
     payload = dca_sc.encodeABI("swap", [0, 0])[2:]
-    job_id = "lcd_pancakeswap"
+    job_id = os.environ['JOB_ID']
     result = await paloma.job_scheduler.create_job(wallet, job_id, dca_bot_address, dca_bot_abi, payload, "evm", "bnb-main")
     print(result)
+
 
 async def main():
     load_dotenv()
