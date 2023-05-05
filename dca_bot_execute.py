@@ -6,41 +6,41 @@ from web3.contract import Contract
 from dotenv import load_dotenv
 from paloma_sdk.client.lcd import AsyncLCDClient
 from paloma_sdk.key.mnemonic import MnemonicKey
+from paloma_sdk.client.lcd.api.tx import CreateTxOptions
+from paloma_sdk.core.wasm import MsgExecuteContract
+from paloma_sdk.core.coins import Coins
+
 
 async def pancakeswap_bot():
     node: str = os.environ['BNB_NODE']
     w3: Web3 = Web3(Web3.HTTPProvider(node))
     dca_bot_address: str = os.environ['PANCAKESWAP_DCA_BOT']
     dca_bot_abi: str = os.environ['DCA_BOT_ABI']
-    dca_sc: Contract = w3.eth.contract(address=dca_bot_address, abi=dca_bot_abi)
+    dca_sc: Contract = w3.eth.contract(
+        address=dca_bot_address, abi=dca_bot_abi)
     swap_id, amount_out_min, number_trades = dca_sc.functions.triggerable_deposit().call()
-    try:
-        log_file = open("./pancakeswap.log", "r")
-    except:
-        log_file = open("./pancakeswap.log", "w")
-        log_file.close()
-        log_file = open("./pancakeswap.log", "r")
-    swapping_data = log_file.readlines()
-    last_swapping_id = "-1" if len(swapping_data) < 2 else swapping_data[-2]
-    num_trade = "-1" if len(swapping_data) < 2 else swapping_data[-1]
-    print(swap_id, amount_out_min, number_trades)
-    if int(number_trades) > 0 and (int(last_swapping_id) != int(swap_id) or int(num_trade) != int(number_trades)):
-        payload = dca_sc.encodeABI("swap", [int(swap_id), int(amount_out_min)])[2:]
+    if int(number_trades) > 0 or int(swap_id) > 0 or int(amount_out_min) > 0:
         paloma_lcd = os.environ['PALOMA_LCD']
         paloma_chain_id = os.environ['PALOMA_CHAIN_ID']
-        paloma: AsyncLCDClient = AsyncLCDClient(url=paloma_lcd, chain_id=paloma_chain_id)
+        paloma: AsyncLCDClient = AsyncLCDClient(
+            url=paloma_lcd, chain_id=paloma_chain_id)
         paloma.gas_prices = "0.01ugrain"
         mnemonic: str = os.environ['PALOMA_KEY']
         acct: MnemonicKey = MnemonicKey(mnemonic=mnemonic)
         wallet = paloma.wallet(acct)
+        dca_cw = os.environ['PANCAKESWAP_DCA_BOT_CW']
+        tx = await wallet.create_and_sign_tx(
+            CreateTxOptions(
+                msgs=[
+                    MsgExecuteContract(wallet.key.acc_address, dca_cw, {
+                        "swap": {"swap_id": swap_id, "amount_out_min": amount_out_min, "number_trades": number_trades}
+                    }, Coins())
+                ]
+            )
+        )
 
-        job_id = os.environ['JOB_ID']
-        result = await paloma.job_scheduler.execute_job(wallet, job_id, payload)
+        result = await paloma.tx.broadcast(tx)
         print(result)
-        log_file.close()
-        log_file = open("./pancakeswap.log", "a")
-        log_file.writelines([str(swap_id) + "\n", str(number_trades) + "\n"])
-        log_file.close()
 
 
 async def main():
