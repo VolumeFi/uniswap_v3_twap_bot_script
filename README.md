@@ -1,4 +1,4 @@
-# DCA trading bot python script
+# DCA trading bot python script for Pancakeswap
 
 ### dca_bot_init.py
 
