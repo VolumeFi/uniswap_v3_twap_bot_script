@@ -20,7 +20,7 @@ async def set_paloma():
     acct: MnemonicKey = MnemonicKey(mnemonic=mnemonic)
     wallet = paloma.wallet(acct)
 
-    dca_cw = os.environ['PANCAKESWAP_DCA_BOT_CW']
+    dca_cw = os.environ['CW']
     tx = await wallet.create_and_sign_tx(CreateTxOptions(msgs=[
         MsgExecuteContract(wallet.key.acc_address, dca_cw, {
                 "set_paloma": {}

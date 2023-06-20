@@ -1,6 +1,7 @@
 import os
 import uvloop
 import asyncio
+import json
 from web3 import Web3
 from web3.contract import Contract
 from dotenv import load_dotenv
@@ -11,11 +12,11 @@ from paloma_sdk.core.wasm import MsgExecuteContract
 from paloma_sdk.core.coins import Coins
 
 
-async def pancakeswap_bot():
-    node: str = os.environ['BNB_NODE']
+async def pancakeswap_bot(network):
+    node: str = network['NODE']
     w3: Web3 = Web3(Web3.HTTPProvider(node))
-    dca_bot_address: str = os.environ['PANCAKESWAP_DCA_BOT']
-    dca_bot_abi: str = os.environ['DCA_BOT_ABI']
+    dca_bot_address: str = network['ADDRESS']
+    dca_bot_abi: str = network['ABI']
     dca_sc: Contract = w3.eth.contract(
         address=dca_bot_address, abi=dca_bot_abi)
     swap_id, amount_out_min, number_trades = \
@@ -29,7 +30,7 @@ async def pancakeswap_bot():
         mnemonic: str = os.environ['PALOMA_KEY']
         acct: MnemonicKey = MnemonicKey(mnemonic=mnemonic)
         wallet = paloma.wallet(acct)
-        dca_cw = os.environ['PANCAKESWAP_DCA_BOT_CW']
+        dca_cw = network['CW']
         tx = await wallet.create_and_sign_tx(CreateTxOptions(msgs=[
             MsgExecuteContract(wallet.key.acc_address, dca_cw, {
                 "swap": {
@@ -46,7 +47,14 @@ async def pancakeswap_bot():
 
 async def main():
     load_dotenv()
-    await pancakeswap_bot()
+
+    # Load JSON
+    with open("networks.json") as f:
+        networks = json.load(f)
+
+    # Cycle through networks
+    for network in networks:
+        await pancakeswap_bot(network)
 
 
 if __name__ == "__main__":
