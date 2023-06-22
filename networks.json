@@ -2,7 +2,7 @@
   {
     "NODE": "https://palpable-soft-cloud.bsc.quiknode.pro/",
     "ABI": "[]",
-    "VYPER": "0x",
+    "ADDRESS": "0x",
     "JOB_ID": "pancakeswapv2dcajob0",
     "CHAIN_TYPE": "evm",
     "CHAIN_REFERENCE_ID": "bnb-main",
@@ -16,7 +16,7 @@
   {
     "NODE": "https://crimson-silent-sunset.quiknode.pro/",
     "ABI": "[]",
-    "VYPER": "0x",
+    "ADDRESS": "0x",
     "JOB_ID": "uniswapv2dcajob0",
     "CHAIN_TYPE": "evm",
     "CHAIN_REFERENCE_ID": "eth-main",
@@ -30,7 +30,7 @@
   {
     "NODE": "https://palpable-soft-cloud.bsc.quiknode.pro/",
     "ABI": "[]",
-    "VYPER": "0x",
+    "ADDRESS": "0x",
     "JOB_ID": "apeswapv2lobjob0",
     "CHAIN_TYPE": "evm",
     "CHAIN_REFERENCE_ID": "bnb-main",
