@@ -39,7 +39,7 @@ Here's the structure of a network configuration:
   "COINGECKO_CHAIN_ID": "<coingecko-chain-id>",
   "NETWORK_NAME": "<network-name>",
   "WETH": "<weth-address>",
-  "FROM_BLOCK": <from-block>,
+  "FROM_BLOCK": "<from-block>",
   "CW": "<cw>",
   "DEX": "<dex-name>"
 }]

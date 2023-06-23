@@ -2,6 +2,7 @@
   {
     "NODE": "https://palpable-soft-cloud.bsc.quiknode.pro/",
     "ABI": "[]",
+    "ABI_VIEW": "[]",
     "ADDRESS": "0x",
     "JOB_ID": "pancakeswapv2dcajob0",
     "CHAIN_TYPE": "evm",
@@ -16,6 +17,7 @@
   {
     "NODE": "https://crimson-silent-sunset.quiknode.pro/",
     "ABI": "[]",
+    "ABI_VIEW": "[]",
     "ADDRESS": "0x",
     "JOB_ID": "uniswapv2dcajob0",
     "CHAIN_TYPE": "evm",
@@ -30,6 +32,7 @@
   {
     "NODE": "https://palpable-soft-cloud.bsc.quiknode.pro/",
     "ABI": "[]",
+    "ABI_VIEW": "[]",
     "ADDRESS": "0x",
     "JOB_ID": "apeswapv2lobjob0",
     "CHAIN_TYPE": "evm",

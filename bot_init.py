@@ -31,8 +31,8 @@ async def pancakeswap_bot(network):
     payload = dca_sc.encodeABI("swap", [0, 0])[2:]
     job_id = network['JOB_ID']
     result = await paloma.job_scheduler.create_job(
-        wallet, job_id, dca_bot_address, dca_bot_abi, payload, network['CHAIN_TYPE'],
-        network['CHAIN_REFERENCE_ID'])
+        wallet, job_id, dca_bot_address, dca_bot_abi, payload,
+        network['CHAIN_TYPE'], network['CHAIN_REFERENCE_ID'])
     print(result)
     time.sleep(6)
 
@@ -41,7 +41,7 @@ async def pancakeswap_bot(network):
         "retry_delay": 30,
         "job_id": job_id
     }
-    code_id = network['ADDRESS']
+    code_id = os.environ['CODE_ID']
     funds = Coins()
     tx = await wallet.create_and_sign_tx(
         CreateTxOptions(
