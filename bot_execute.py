@@ -22,7 +22,7 @@ PALOMA.gas_prices = "0.01ugrain"
 MNEMONIC: str = os.environ['PALOMA_KEY']
 ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
 WALLET = PALOMA.wallet(ACCT)
-
+DB_PATH = os.environ['DB_PATH']
 
 async def pancakeswap_bot(network):
     node: str = network['NODE']
@@ -32,27 +32,39 @@ async def pancakeswap_bot(network):
     FROM_BLOCK: int = int(network['FROM_BLOCK'])
     DEX: str = network['DEX']
     NETWORK_NAME: str = network['NETWORK_NAME']
-    CON: Connection = sqlite3.connect("events.db")
+    CON: Connection = sqlite3.connect(DB_PATH)
+    # Create Tables
     CON.execute("CREATE TABLE IF NOT EXISTS fetched_blocks (\
-ID INTEGER PRIMARY KEY AUTOINCREMENT, \
-block_number INTEGER, \
-network_name TEXT);")
+        ID INTEGER PRIMARY KEY AUTOINCREMENT, \
+        block_number INTEGER, \
+        network_name TEXT);")
+
     CON.execute("CREATE TABLE IF NOT EXISTS deposits (\
-swap_id INTEGER NOT NULL, \
-token0 TEXT NOT NULL, \
-token1 TEXT NOT NULL, \
-input_amount TEXT NOT NULL, \
-number_trades INTEGER NOT NULL, \
-interval INTEGER NOT NULL, \
-starting_time INTEGER NOT NULL, \
-remaining_counts INTEGER NOT NULL, \
-network_name TEXT, \
-dex_name TEXT, \
-bot TEXT);")
-    CON.execute("CREATE INDEX IF NOT EXISTS swap_idx ON deposits (swap_id);")
+        id INTEGER PRIMARY KEY AUTOINCREMENT, \
+        deposit_id INTEGER NOT NULL, \
+        token0 TEXT NOT NULL, \
+        token1 TEXT NOT NULL, \
+        amount0 TEXT NOT NULL, \
+        amount1 TEXT NOT NULL, \
+        depositor TEXT NOT NULL, \
+        deposit_price REAL, \
+        tracking_price REAL, \
+        profit_taking INTEGER, \
+        stop_loss INTEGER, \
+        withdraw_type INTEGER, \
+        withdraw_block INTEGER, \
+        withdraw_amount TEXT, \
+        withdrawer TEXT, \
+        network_name TEXT, \
+        dex_name TEXT, \
+        bot TEXT);")
+
+    CON.execute("CREATE INDEX IF NOT EXISTS deposit_idx ON deposits (deposit_id);")
+
     CON.execute("CREATE TABLE IF NOT EXISTS users (\
-chat_id TEXT PRIMARY KEY, \
-address TEXT NOT NULL);")
+        chat_id TEXT PRIMARY KEY, \
+        address TEXT NOT NULL);")
+
     res = CON.execute("SELECT * FROM fetched_blocks WHERE network_name = ? \
 AND ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ?);",
                       NETWORK_NAME, NETWORK_NAME)
