@@ -67,7 +67,7 @@ async def pancakeswap_bot(network):
 
     res = CON.execute("SELECT * FROM fetched_blocks WHERE network_name = ? \
 AND ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ?);",
-                      NETWORK_NAME, NETWORK_NAME)
+                      (NETWORK_NAME, NETWORK_NAME))
     from_block: int = 0
     result: tuple = res.fetchone()
     if result is None:
