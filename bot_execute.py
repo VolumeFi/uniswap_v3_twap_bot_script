@@ -35,9 +35,11 @@ async def pancakeswap_bot(network):
     CON: Connection = sqlite3.connect(DB_PATH)
     # Create Tables
     CON.execute("CREATE TABLE IF NOT EXISTS fetched_blocks (\
-        ID INTEGER PRIMARY KEY AUTOINCREMENT, \
+        ID INTEGER PRIMARY_KEY AUTOINCREMENT, \
         block_number INTEGER, \
-        network_name TEXT);")
+        network_name TEXT, \
+        dex TEXT, \
+        bot TEXT);")
 
     CON.execute("CREATE TABLE IF NOT EXISTS deposits (\
         id INTEGER PRIMARY KEY AUTOINCREMENT, \
@@ -65,15 +67,24 @@ async def pancakeswap_bot(network):
         chat_id TEXT PRIMARY KEY, \
         address TEXT NOT NULL);")
 
-    res = CON.execute("SELECT * FROM fetched_blocks WHERE network_name = ? \
-AND ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ?);",
-                      (NETWORK_NAME, NETWORK_NAME))
+    DEX: str = network['DEX']
+    BOT: str = 'dca'
+
+    res = CON.execute(
+        "SELECT * FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ? \
+        AND ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ?);",
+        (NETWORK_NAME, DEX, BOT, NETWORK_NAME, DEX, BOT)
+    )
     from_block: int = 0
     result: tuple = res.fetchone()
     if result is None:
-        data = (FROM_BLOCK - 1,)
+        DEX: str = network['DEX']
+        BOT: str = 'dca'
+
+        data = (FROM_BLOCK - 1, NETWORK_NAME, DEX, BOT)
         CON.execute(
-            "INSERT INTO fetched_blocks (block_number) VALUES (?);", data)
+            "INSERT INTO fetched_blocks (block_number, network_name, dex, bot) VALUES (?, ?, ?, ?);", data
+        )
         CON.commit()
         from_block = int(FROM_BLOCK)
     else:
@@ -99,10 +110,10 @@ AND ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ?);",
             remaining_counts: int = int(log.args.remaining_counts)
             data: tuple = (swap_id, token0, token1, input_amount,
                            number_trades, interval, starting_time,
-                           remaining_counts, NETWORK_NAME, DEX)
+                           remaining_counts, NETWORK_NAME, DEX, 'dca')
             CON.execute("INSERT INTO deposits (swap_id, token0, token1, \
 input_amount, number_trades, interval, starting_time, remaining_counts, \
-network_name, dex_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
+network_name, dex_name, bot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
         CON.commit()
         swapped_logs = dca_sc.events.Swapped\
             .getLogs(fromBlock=i, toBlock=to_block)
@@ -110,15 +121,15 @@ network_name, dex_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
             swap_id: int = int(log.args.swap_id)
             remaining_counts: int = int(log.args.remaining_counts)
             data: tuple = (remaining_counts, swap_id, remaining_counts,
-                           NETWORK_NAME, DEX)
+                           NETWORK_NAME, DEX, 'dca')
             CON.execute("UPDATE deposits SET remaining_counts = ? WHERE \
-swap_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ?;",
+swap_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ?;",
                         data)
         CON.commit()
         i += 10000
-    data: tuple = (NETWORK_NAME, DEX)
+    data: tuple = (NETWORK_NAME, DEX, 'dca')
     res = CON.execute("SELECT * FROM deposits WHERE remaining_counts > 0 AND \
-network_name = ? AND dex_name = ?;", data)
+network_name = ? AND dex_name = ? AND bot = ?;", data)
     results = res.fetchall()
     current_time: int = int(time.time())
     for result in results:
