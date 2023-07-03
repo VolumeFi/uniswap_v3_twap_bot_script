@@ -35,14 +35,14 @@ async def pancakeswap_bot(network):
     CON: Connection = sqlite3.connect(DB_PATH)
     # Create Tables
     CON.execute("CREATE TABLE IF NOT EXISTS fetched_blocks (\
-        ID INTEGER PRIMARY_KEY AUTOINCREMENT, \
+        ID INTEGER PRIMARY KEY, \
         block_number INTEGER, \
         network_name TEXT, \
         dex TEXT, \
         bot TEXT);")
 
     CON.execute("CREATE TABLE IF NOT EXISTS deposits (\
-        id INTEGER PRIMARY KEY AUTOINCREMENT, \
+        id INTEGER PRIMARY KEY, \
         deposit_id INTEGER NOT NULL, \
         token0 TEXT NOT NULL, \
         token1 TEXT NOT NULL, \
