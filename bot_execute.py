@@ -136,10 +136,11 @@ async def pancakeswap_bot(network):
                            number_trades, interval, starting_time,
                            remaining_counts, NETWORK_NAME, DEX, 'dca')
 
-            CON.execute(
+            cursor = CON.cursor()
+            cursor.execute(
                 "SELECT COUNT(*) FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ?;",
                 (swap_id, NETWORK_NAME, DEX, 'dca'))
-            result = CON.fetchone()
+            result = cursor.fetchone()
 
             if result[0] == 0:
                 CON.execute(
