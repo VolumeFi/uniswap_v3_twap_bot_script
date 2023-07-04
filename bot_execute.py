@@ -131,7 +131,8 @@ async def pancakeswap_bot(network):
             interval: int = int(log.args.interval)
             starting_time: int = int(log.args.starting_time)
             remaining_counts: int = int(log.args.number_trades)
-            data: tuple = (swap_id, token0, token1, input_amount, 0, '0',
+            depositor: str = log.args.depositor
+            data: tuple = (swap_id, token0, token1, input_amount, 0, depositor,
                            number_trades, interval, starting_time,
                            remaining_counts, NETWORK_NAME, DEX, 'dca')
             CON.execute("INSERT INTO deposits (deposit_id, token0, token1, \
