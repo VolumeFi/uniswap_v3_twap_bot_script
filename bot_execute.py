@@ -88,7 +88,9 @@ async def pancakeswap_bot(network):
         CON.commit()
         from_block = int(FROM_BLOCK)
     else:
-        from_block = int(result[0]) + 1
+        incremented_block = int(result[0]) + 1
+        from_block = int(FROM_BLOCK) if incremented_block < int(FROM_BLOCK) else incremented_block
+
     BLOCK_NUMBER: int = int(w3.eth.get_block_number())
     dca_sc: Contract = w3.eth.contract(
         address=dca_bot_address, abi=dca_bot_abi)
