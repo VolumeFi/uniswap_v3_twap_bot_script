@@ -25,6 +25,9 @@ WALLET = PALOMA.wallet(ACCT)
 DB_PATH = os.environ['DB_PATH']
 
 async def pancakeswap_bot(network):
+    async def inner():
+        await time.sleep(6)
+
     node: str = network['NODE']
     w3: Web3 = Web3(Web3.HTTPProvider(node))
     dca_bot_address: str = network['ADDRESS']
@@ -66,6 +69,24 @@ async def pancakeswap_bot(network):
     CON.execute("CREATE TABLE IF NOT EXISTS users (\
         chat_id TEXT PRIMARY KEY, \
         address TEXT NOT NULL);")
+
+    # Check if columns exist in the 'deposits' table
+    cursor = CON.execute("PRAGMA table_info(deposits);")
+    columns = [column[1] for column in cursor.fetchall()]
+
+    if 'number_trades' not in columns:
+        CON.execute("ALTER TABLE deposits ADD COLUMN number_trades INTEGER;")
+
+    if 'remaining_counts' not in columns:
+        CON.execute("ALTER TABLE deposits ADD COLUMN remaining_counts INTEGER;")
+
+    if 'interval' not in columns:
+        CON.execute("ALTER TABLE deposits ADD COLUMN interval INTEGER;")
+
+    if 'starting_time' not in columns:
+        CON.execute("ALTER TABLE deposits ADD COLUMN starting_time INTEGER;")
+
+    CON.commit()
 
     DEX: str = network['DEX']
     BOT: str = 'dca'
@@ -109,13 +130,13 @@ async def pancakeswap_bot(network):
             number_trades: int = int(log.args.number_trades)
             interval: int = int(log.args.interval)
             starting_time: int = int(log.args.starting_time)
-            remaining_counts: int = int(log.args.remaining_counts)
-            data: tuple = (swap_id, token0, token1, input_amount,
+            remaining_counts: int = int(log.args.number_trades)
+            data: tuple = (swap_id, token0, token1, input_amount, 0, '0',
                            number_trades, interval, starting_time,
                            remaining_counts, NETWORK_NAME, DEX, 'dca')
-            CON.execute("INSERT INTO deposits (swap_id, token0, token1, \
-input_amount, number_trades, interval, starting_time, remaining_counts, \
-network_name, dex_name, bot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
+            CON.execute("INSERT INTO deposits (deposit_id, token0, token1, \
+amount0, amount1, depositor, number_trades, interval, starting_time, remaining_counts, \
+network_name, dex_name, bot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
         CON.commit()
         swapped_logs = dca_sc.events.Swapped\
             .getLogs(fromBlock=i, toBlock=to_block)
@@ -130,16 +151,16 @@ swap_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND b
         CON.commit()
         i += 10000
     data: tuple = (NETWORK_NAME, DEX, 'dca')
-    res = CON.execute("SELECT * FROM deposits WHERE remaining_counts > 0 AND \
+    res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts FROM deposits WHERE remaining_counts > 0 AND \
 network_name = ? AND dex_name = ? AND bot = ?;", data)
     results = res.fetchall()
     current_time: int = int(time.time())
     for result in results:
         swap_id = int(result[0])
-        number_trades = int(result[4])
-        interval = int(result[5])
-        starting_time = int(result[6])
-        remaining_counts = int(result[7])
+        number_trades = int(result[1])
+        interval = int(result[2])
+        starting_time = int(result[3])
+        remaining_counts = int(result[4])
         if starting_time + interval * (number_trades - remaining_counts) \
            <= current_time:
             amount_out_min = dca_sc.functions.swap(swap_id, 0).call()
@@ -153,9 +174,10 @@ network_name = ? AND dex_name = ? AND bot = ?;", data)
                         }
                 }, Coins())
             ]))
-            result = await PALOMA.tx.broadcast_sync(tx)
-            print(result)
-        await time.sleep(6)
+            PALOMA.tx.broadcast_sync(tx)
+            #print(result)
+        return inner()
+
 
 
 async def main():
@@ -166,8 +188,9 @@ async def main():
         networks = json.load(f)
 
     # Cycle through networks
-    for network in networks:
-        await pancakeswap_bot(network)
+    while True:
+        for network in networks:
+            await pancakeswap_bot(network)
 
 
 if __name__ == "__main__":
