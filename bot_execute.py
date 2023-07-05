@@ -122,33 +122,47 @@ async def pancakeswap_bot(network):
             to_block = BLOCK_NUMBER
         deposit_logs = dca_sc.events.Deposited\
             .getLogs(fromBlock=i, toBlock=to_block)
-        for log in deposit_logs:
-            swap_id: int = int(log.args.swap_id)
-            token0: str = log.args.token0
-            token1: str = log.args.token1
-            input_amount: str = log.args.input_amount
-            number_trades: int = int(log.args.number_trades)
-            interval: int = int(log.args.interval)
-            starting_time: int = int(log.args.starting_time)
-            remaining_counts: int = int(log.args.number_trades)
-            depositor: str = log.args.depositor
-            data: tuple = (swap_id, token0, token1, input_amount, 0, depositor,
-                           number_trades, interval, starting_time,
-                           remaining_counts, NETWORK_NAME, DEX, 'dca')
 
-            cursor = CON.cursor()
-            cursor.execute(
-                "SELECT COUNT(*) FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ?;",
-                (swap_id, NETWORK_NAME, DEX, 'dca'))
-            result = cursor.fetchone()
+        # Acquire an exclusive lock on the database
+        CON.execute("BEGIN EXCLUSIVE;")
 
-            if result[0] == 0:
-                CON.execute(
-                    "INSERT INTO deposits (deposit_id, token0, token1, amount0, amount1, depositor, number_trades, interval, starting_time, remaining_counts, network_name, dex_name, bot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    data)
-            else:
-                print("Skipping duplicate entry:", data)
-        CON.commit()
+        try:
+            for log in deposit_logs:
+                swap_id: int = int(log.args.swap_id)
+                token0: str = log.args.token0
+                token1: str = log.args.token1
+                input_amount: str = log.args.input_amount
+                number_trades: int = int(log.args.number_trades)
+                interval: int = int(log.args.interval)
+                starting_time: int = int(log.args.starting_time)
+                remaining_counts: int = int(log.args.number_trades)
+                depositor: str = log.args.depositor
+                data: tuple = (swap_id, token0, token1, input_amount, 0, depositor,
+                               number_trades, interval, starting_time,
+                               remaining_counts, NETWORK_NAME, DEX, 'dca')
+
+                cursor = CON.cursor()
+                cursor.execute(
+                    "SELECT COUNT(*) FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ?;",
+                    (swap_id, NETWORK_NAME, DEX, 'dca'))
+                result = cursor.fetchone()
+
+                if result[0] == 0:
+                    CON.execute(
+                        "INSERT INTO deposits (deposit_id, token0, token1, amount0, amount1, depositor, number_trades, interval, starting_time, remaining_counts, network_name, dex_name, bot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        data)
+                else:
+                    print("Skipping duplicate entry:", data)
+
+            CON.commit()
+
+        except:
+            CON.rollback()
+            raise
+
+        finally:
+            CON.commit()
+
         swapped_logs = dca_sc.events.Swapped\
             .getLogs(fromBlock=i, toBlock=to_block)
         for log in swapped_logs:
