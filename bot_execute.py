@@ -13,6 +13,9 @@ from paloma_sdk.key.mnemonic import MnemonicKey
 from paloma_sdk.client.lcd.api.tx import CreateTxOptions
 from paloma_sdk.core.wasm import MsgExecuteContract
 from paloma_sdk.core.coins import Coins
+from mixpanel import Mixpanel
+
+mp = Mixpanel('eaae482845dadd88e1ce07b9fa03dd6b')
 
 PALOMA_LCD = os.environ['PALOMA_LCD']
 PALOMA_CHAIN_ID = os.environ['PALOMA_CHAIN_ID']
@@ -151,6 +154,12 @@ async def pancakeswap_bot(network):
                     CON.execute(
                         "INSERT INTO deposits (deposit_id, token0, token1, amount0, amount1, depositor, number_trades, interval, starting_time, remaining_counts, network_name, dex_name, bot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                         data)
+
+                    mp.track(str(swap_id), 'bot-add', {
+                        'bot': 'dca',
+                        'dex': DEX,
+                        'network': NETWORK_NAME
+                    })
                 else:
                     print("Skipping duplicate entry:", data)
 
