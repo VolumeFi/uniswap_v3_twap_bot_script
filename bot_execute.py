@@ -195,22 +195,25 @@ network_name = ? AND dex_name = ? AND bot = ?;", data)
         interval = int(result[2])
         starting_time = int(result[3])
         remaining_counts = int(result[4])
-        if starting_time + interval * (number_trades - remaining_counts) \
-           <= current_time:
-            amount_out_min = dca_sc.functions.swap(swap_id, 0).call()
-            dca_cw = network['CW']
-            tx = await WALLET.create_and_sign_tx(CreateTxOptions(msgs=[
-                MsgExecuteContract(WALLET.key.acc_address, dca_cw, {
-                    "swap": {
-                        "swap_id": str(swap_id),
-                        "amount_out_min": str(amount_out_min),
-                        "number_trades": str(number_trades)
+        try:
+            if starting_time + interval * (number_trades - remaining_counts) <= current_time:
+                amount_out_min = dca_sc.functions.swap(swap_id, 0).call()
+                dca_cw = network['CW']
+                tx = await WALLET.create_and_sign_tx(CreateTxOptions(msgs=[
+                    MsgExecuteContract(WALLET.key.acc_address, dca_cw, {
+                        "swap": {
+                            "swap_id": str(swap_id),
+                            "amount_out_min": str(amount_out_min),
+                            "number_trades": str(number_trades)
                         }
-                }, Coins())
-            ]))
-            PALOMA.tx.broadcast_sync(tx)
+                    }, Coins())
+                ]))
+                PALOMA.tx.broadcast_sync(tx)
+        except Exception as e:
+            print("An error occurred:", str(e))
+
             #print(result)
-        return inner()
+    return inner()
 
 
 
