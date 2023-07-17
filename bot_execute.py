@@ -95,19 +95,21 @@ async def pancakeswap_bot(network):
     BOT: str = 'dca'
 
     res = CON.execute(
-        "SELECT * FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ? \
-        AND ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ?);",
-        (NETWORK_NAME, DEX, BOT, NETWORK_NAME, DEX, BOT)
+        "SELECT * FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ? AND contract_instance = ?\
+        AND ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ? AND contract_instance = ?);",
+        (NETWORK_NAME, DEX, BOT, dca_bot_address, NETWORK_NAME, DEX, BOT, dca_bot_address)
     )
+
+
     from_block: int = 0
     result: tuple = res.fetchone()
     if result is None:
         DEX: str = network['DEX']
         BOT: str = 'dca'
 
-        data = (FROM_BLOCK - 1, NETWORK_NAME, DEX, BOT)
+        data = (FROM_BLOCK - 1, NETWORK_NAME, DEX, BOT, dca_bot_address)
         CON.execute(
-            "INSERT INTO fetched_blocks (block_number, network_name, dex, bot) VALUES (?, ?, ?, ?);", data
+            "INSERT INTO fetched_blocks (block_number, network_name, dex, bot, contract_instance) VALUES (?, ?, ?, ?, ?);", data
         )
         CON.commit()
         from_block = int(FROM_BLOCK)
@@ -142,17 +144,18 @@ async def pancakeswap_bot(network):
                 depositor: str = log.args.depositor
                 data: tuple = (swap_id, token0, token1, input_amount, 0, depositor,
                                number_trades, interval, starting_time,
-                               remaining_counts, NETWORK_NAME, DEX, 'dca')
+                               remaining_counts, NETWORK_NAME, DEX, 'dca', dca_bot_address)
 
                 cursor = CON.cursor()
                 cursor.execute(
-                    "SELECT COUNT(*) FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ?;",
-                    (swap_id, NETWORK_NAME, DEX, 'dca'))
+                    "SELECT COUNT(*) FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
+                    (swap_id, NETWORK_NAME, DEX, 'dca', dca_bot_address)
+                )
                 result = cursor.fetchone()
 
                 if result[0] == 0:
                     CON.execute(
-                        "INSERT INTO deposits (deposit_id, token0, token1, amount0, amount1, depositor, number_trades, interval, starting_time, remaining_counts, network_name, dex_name, bot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        "INSERT INTO deposits (deposit_id, token0, token1, amount0, amount1, depositor, number_trades, interval, starting_time, remaining_counts, network_name, dex_name, bot, contract) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                         data)
 
                     mp.track(str(swap_id), 'bot-add', {
@@ -177,16 +180,16 @@ async def pancakeswap_bot(network):
         for log in swapped_logs:
             swap_id: int = int(log.args.swap_id)
             remaining_counts: int = int(log.args.remaining_counts)
-            data: tuple = (remaining_counts, swap_id, remaining_counts,
-                           NETWORK_NAME, DEX, 'dca')
-            CON.execute("UPDATE deposits SET remaining_counts = ? WHERE \
-swap_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ?;",
-                        data)
+            data: tuple = (remaining_counts, swap_id, remaining_counts, NETWORK_NAME, DEX, 'dca', dca_bot_address)
+            CON.execute(
+                "UPDATE deposits SET remaining_counts = ? WHERE swap_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
+                data)
         CON.commit()
         i += 10000
-    data: tuple = (NETWORK_NAME, DEX, 'dca')
-    res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts FROM deposits WHERE remaining_counts > 0 AND \
-network_name = ? AND dex_name = ? AND bot = ?;", data)
+    data: tuple = (NETWORK_NAME, DEX, 'dca', dca_bot_address)
+    res = CON.execute(
+        "SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
+        data)
     results = res.fetchall()
     current_time: int = int(time.time())
     for result in results:
@@ -195,9 +198,10 @@ network_name = ? AND dex_name = ? AND bot = ?;", data)
         interval = int(result[2])
         starting_time = int(result[3])
         remaining_counts = int(result[4])
+        depositor = result[5]
         try:
             if starting_time + interval * (number_trades - remaining_counts) <= current_time:
-                amount_out_min = dca_sc.functions.swap(swap_id, 0).call()
+                amount_out_min = dca_sc.functions.swap(swap_id, 0).call({"from": depositor})
                 dca_cw = network['CW']
                 tx = await WALLET.create_and_sign_tx(CreateTxOptions(msgs=[
                     MsgExecuteContract(WALLET.key.acc_address, dca_cw, {
