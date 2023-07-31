@@ -28,7 +28,6 @@ MNEMONIC: str = os.environ['PALOMA_KEY']
 ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
 WALLET = PALOMA.wallet(ACCT)
 DB_PATH = os.environ['DB_PATH']
-ADDRESS: str = NULL
 
 async def pancakeswap_bot(network):
     async def inner():
@@ -37,7 +36,6 @@ async def pancakeswap_bot(network):
     node: str = network['NODE']
     w3: Web3 = Web3(Web3.HTTPProvider(node))
     dca_bot_address: str = network['ADDRESS']
-    ADDRESS = dca_bot_address
     dca_bot_abi: str = network['ABI_VIEW']
     FROM_BLOCK: int = int(network['FROM_BLOCK'])
     DEX: str = network['DEX']
@@ -190,10 +188,10 @@ async def pancakeswap_bot(network):
                 data)
 
             try:
-                depositor: str = str(await getDepositor(log.args.deposit_id))
+                depositor: str = str(await getDepositor(log.args.deposit_id, dca_bot_address))
                 if log.args.withdrawer != depositor:
                     requests.get(TELEGRAM_ALERT_API, params=dict(depositor=depositor))
-            except e:
+            except Exception as e:
                 print("Telegram alert error occurred:", str(e))
 
         CON.commit()
@@ -232,16 +230,16 @@ async def pancakeswap_bot(network):
     return inner()
 
 
-async def getDepositor(deposit_id):
+async def getDepositor(deposit_id, dca_bot_address):
     CON: Connection = sqlite3.connect(DB_PATH)
     res = CON.execute(
         "SELECT depositor FROM deposits WHERE deposit_id = ? AND contract = ?;",
-        (deposit_id, ADDRESS))
-    result = cursor.fetchone()
+        (deposit_id, dca_bot_address))
+    result = res.fetchone()
     if result is not None:
         return result[0]
     else:
-        return NULL
+        return None
 
 
 async def main():
