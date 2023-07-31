@@ -194,7 +194,7 @@ async def pancakeswap_bot(network):
                 if log.args.withdrawer != depositor:
                     requests.get(TELEGRAM_ALERT_API, params=dict(depositor=depositor))
             except e:
-                console.log('Telegram alert error', e)
+                print("Telegram alert error occurred:", str(e))
 
         CON.commit()
         i += 10000
