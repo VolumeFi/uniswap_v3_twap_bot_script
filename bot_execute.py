@@ -4,6 +4,7 @@ import asyncio
 import json
 import sqlite3
 import time
+import requests
 from sqlite3 import Connection
 from web3 import Web3
 from web3.contract import Contract
@@ -21,11 +22,13 @@ PALOMA_LCD = os.environ['PALOMA_LCD']
 PALOMA_CHAIN_ID = os.environ['PALOMA_CHAIN_ID']
 PALOMA: AsyncLCDClient = AsyncLCDClient(
     url=PALOMA_LCD, chain_id=PALOMA_CHAIN_ID)
+TELEGRAM_ALERT_API = os.environ['TELEGRAM_ALERT_API']
 PALOMA.gas_prices = "0.01ugrain"
 MNEMONIC: str = os.environ['PALOMA_KEY']
 ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
 WALLET = PALOMA.wallet(ACCT)
 DB_PATH = os.environ['DB_PATH']
+ADDRESS: str = NULL
 
 async def pancakeswap_bot(network):
     async def inner():
@@ -34,6 +37,7 @@ async def pancakeswap_bot(network):
     node: str = network['NODE']
     w3: Web3 = Web3(Web3.HTTPProvider(node))
     dca_bot_address: str = network['ADDRESS']
+    ADDRESS = dca_bot_address
     dca_bot_abi: str = network['ABI_VIEW']
     FROM_BLOCK: int = int(network['FROM_BLOCK'])
     DEX: str = network['DEX']
@@ -184,6 +188,14 @@ async def pancakeswap_bot(network):
             CON.execute(
                 "UPDATE deposits SET remaining_counts = ? WHERE swap_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
                 data)
+
+            try:
+                depositor: str = str(await getDepositor(log.args.deposit_id))
+                if log.args.withdrawer != depositor:
+                    requests.get(TELEGRAM_ALERT_API, params=dict(depositor=depositor))
+            except e:
+                print("Telegram alert error occurred:", str(e))
+
         CON.commit()
         i += 10000
     data: tuple = (NETWORK_NAME, DEX, 'dca', dca_bot_address)
@@ -219,6 +231,17 @@ async def pancakeswap_bot(network):
             #print(result)
     return inner()
 
+
+async def getDepositor(deposit_id):
+    CON: Connection = sqlite3.connect(DB_PATH)
+    res = CON.execute(
+        "SELECT depositor FROM deposits WHERE deposit_id = ? AND contract = ?;",
+        (deposit_id, ADDRESS))
+    result = cursor.fetchone()
+    if result is not None:
+        return result[0]
+    else:
+        return NULL
 
 
 async def main():
