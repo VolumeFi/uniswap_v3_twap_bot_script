@@ -28,6 +28,12 @@ MNEMONIC: str = os.environ['PALOMA_KEY']
 ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
 WALLET = PALOMA.wallet(ACCT)
 DB_PATH = os.environ['DB_PATH']
+VETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+BOT_NAME = 'DCA'
+# Telegram alert return type
+SUCCESS = 1 # All success withdrawn type.
+EXPIRED = 2 # For Limit order, Stop loss bot type.
+REMAINING = 3 # For DCA bot type.
 
 async def pancakeswap_bot(network):
     async def inner():
@@ -188,9 +194,17 @@ async def pancakeswap_bot(network):
                 data)
 
             try:
-                depositor: str = str(await getDepositor(log.args.deposit_id, dca_bot_address))
-                if log.args.withdrawer != depositor:
-                    requests.get(TELEGRAM_ALERT_API, params=dict(depositor=depositor))
+                botInfo = await getBot(swap_id, dca_bot_address)
+                tokenName = await getBotName(botInfo[1])
+                if botInfo:
+                    params = {
+                        'depositor': botInfo[0],
+                        'kind': REMAINING if remaining_counts > 0 else SUCCESS,
+                        'tokenName': tokenName,
+                        'botType': BOT_NAME,
+                        'remainCounts': remaining_counts
+                    }
+                    requests.get(TELEGRAM_ALERT_API, params=params)
             except Exception as e:
                 print("Telegram alert error occurred:", str(e))
 
@@ -229,17 +243,43 @@ async def pancakeswap_bot(network):
             #print(result)
     return inner()
 
-
-async def getDepositor(deposit_id, dca_bot_address):
+async def getBot(deposit_id, dca_bot_address):
     CON: Connection = sqlite3.connect(DB_PATH)
     res = CON.execute(
-        "SELECT depositor FROM deposits WHERE deposit_id = ? AND contract = ?;",
+        "SELECT depositor, token1 FROM deposits WHERE deposit_id = ? AND contract = ?;",
         (deposit_id, dca_bot_address))
     result = res.fetchone()
     if result is not None:
-        return result[0]
+        return result
     else:
         return None
+
+async def getBotName(tokenAddress):
+    try:
+        coinInfo = None
+        # Load JSON
+        # Opening JSON file
+        f = open('gecko.json')
+        geckoTokens = json.load(f)
+
+        # Cycle through networks
+        for geckoToken in geckoTokens:
+            if tokenAddress.str.lower() != VETH.str.lower():
+                for value in geckoToken['platforms'].values():
+                    if value.str.lower() == tokenAddress.str.lower():
+                        coinInfo = geckoToken
+                        break
+            else:
+                if geckoToken['id'] == "ethereum":
+                    coinInfo = geckoToken
+            if coinInfo:
+                break
+        if coinInfo is not None:
+            return coinInfo['name']
+        else:
+            return None
+    except Exception as e:
+        print("Get bot info error occurred:", str(e))
 
 
 async def main():
