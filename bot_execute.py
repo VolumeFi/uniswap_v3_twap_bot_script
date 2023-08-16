@@ -29,7 +29,7 @@ ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
 WALLET = PALOMA.wallet(ACCT)
 DB_PATH = os.environ['DB_PATH']
 VETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
-BOT_NAME = 'DCA'
+BOT_NAME = 'TWAP'
 # Telegram alert return type
 SUCCESS = 1 # All success withdrawn type.
 EXPIRED = 2 # For Limit order, Stop loss bot type.
@@ -246,7 +246,7 @@ async def pancakeswap_bot(network):
 async def getBot(deposit_id, dca_bot_address):
     CON: Connection = sqlite3.connect(DB_PATH)
     res = CON.execute(
-        "SELECT depositor, token1 FROM deposits WHERE deposit_id = ? AND contract = ?;",
+        "SELECT depositor, token0 FROM deposits WHERE deposit_id = ? AND contract = ?;",
         (deposit_id, dca_bot_address))
     result = res.fetchone()
     if result is not None:
