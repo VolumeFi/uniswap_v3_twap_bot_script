@@ -264,9 +264,9 @@ async def getBotName(tokenAddress):
 
         # Cycle through networks
         for geckoToken in geckoTokens:
-            if tokenAddress.str.lower() != VETH.str.lower():
+            if tokenAddress.lower() != VETH.lower():
                 for value in geckoToken['platforms'].values():
-                    if value.str.lower() == tokenAddress.str.lower():
+                    if value and value.lower() == tokenAddress.lower():
                         coinInfo = geckoToken
                         break
             else:
