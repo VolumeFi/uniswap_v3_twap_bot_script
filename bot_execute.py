@@ -16,105 +16,59 @@ from paloma_sdk.core.wasm import MsgExecuteContract
 from paloma_sdk.core.coins import Coins
 from mixpanel import Mixpanel
 
+load_dotenv()
 mp = Mixpanel('eaae482845dadd88e1ce07b9fa03dd6b')
 
 PALOMA_LCD = os.environ['PALOMA_LCD']
 PALOMA_CHAIN_ID = os.environ['PALOMA_CHAIN_ID']
-PALOMA: AsyncLCDClient = AsyncLCDClient(
-    url=PALOMA_LCD, chain_id=PALOMA_CHAIN_ID)
 TELEGRAM_ALERT_API = os.environ['TELEGRAM_ALERT_API']
-PALOMA.gas_prices = "0.01ugrain"
 MNEMONIC: str = os.environ['PALOMA_KEY']
-ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
-WALLET = PALOMA.wallet(ACCT)
 DB_PATH = os.environ['DB_PATH']
+SLIPPAGE = int(os.environ['SLIPPAGE'])
+COINGECKO_API_KEY = os.environ['COINGECKO_API_KEY']
+DENOMINATOR = 10000
+BOT: str = 'dca'
+MAX_SIZE = 8
 VETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 BOT_NAME = 'TWAP'
 # Telegram alert return type
-SUCCESS = 1 # All success withdrawn type.
-EXPIRED = 2 # For Limit order, Stop loss bot type.
-REMAINING = 3 # For DCA bot type.
+SUCCESS = 1  # All success withdrawn type.
+EXPIRED = 2  # For Limit order, Stop loss bot type.
+REMAINING = 3  # For DCA bot type.
 
-async def pancakeswap_bot(network):
+price = {}
+
+
+async def dca_bot(network):
+    global price
+
     async def inner():
-        await time.sleep(6)
+        await asyncio.sleep(6)
 
     node: str = network['NODE']
     w3: Web3 = Web3(Web3.HTTPProvider(node))
     dca_bot_address: str = network['ADDRESS']
-    dca_bot_abi: str = network['ABI_VIEW']
+    dca_bot_abi: str = network['ABI']
     FROM_BLOCK: int = int(network['FROM_BLOCK'])
     DEX: str = network['DEX']
     NETWORK_NAME: str = network['NETWORK_NAME']
+    COINGECKO_CHAIN_ID: str = network['COINGECKO_CHAIN_ID']
     CON: Connection = sqlite3.connect(DB_PATH)
+    PALOMA: AsyncLCDClient = AsyncLCDClient(url=PALOMA_LCD, chain_id=PALOMA_CHAIN_ID)
+    PALOMA.gas_prices = "0.01ugrain"
+    ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
+    WALLET = PALOMA.wallet(ACCT)
     # Create Tables
-    CON.execute("CREATE TABLE IF NOT EXISTS fetched_blocks (\
-        ID INTEGER PRIMARY KEY, \
-        block_number INTEGER, \
-        network_name TEXT, \
-        dex TEXT, \
-        bot TEXT);")
-
-    CON.execute("CREATE TABLE IF NOT EXISTS deposits (\
-        id INTEGER PRIMARY KEY, \
-        deposit_id INTEGER NOT NULL, \
-        token0 TEXT NOT NULL, \
-        token1 TEXT NOT NULL, \
-        amount0 TEXT NOT NULL, \
-        amount1 TEXT NOT NULL, \
-        depositor TEXT NOT NULL, \
-        deposit_price REAL, \
-        tracking_price REAL, \
-        profit_taking INTEGER, \
-        stop_loss INTEGER, \
-        withdraw_type INTEGER, \
-        withdraw_block INTEGER, \
-        withdraw_amount TEXT, \
-        withdrawer TEXT, \
-        network_name TEXT, \
-        dex_name TEXT, \
-        bot TEXT);")
-
-    CON.execute("CREATE INDEX IF NOT EXISTS deposit_idx ON deposits (deposit_id);")
-
-    CON.execute("CREATE TABLE IF NOT EXISTS users (\
-        chat_id TEXT PRIMARY KEY, \
-        address TEXT NOT NULL);")
-
-    # Check if columns exist in the 'deposits' table
-    cursor = CON.execute("PRAGMA table_info(deposits);")
-    columns = [column[1] for column in cursor.fetchall()]
-
-    if 'number_trades' not in columns:
-        CON.execute("ALTER TABLE deposits ADD COLUMN number_trades INTEGER;")
-
-    if 'remaining_counts' not in columns:
-        CON.execute("ALTER TABLE deposits ADD COLUMN remaining_counts INTEGER;")
-
-    if 'interval' not in columns:
-        CON.execute("ALTER TABLE deposits ADD COLUMN interval INTEGER;")
-
-    if 'starting_time' not in columns:
-        CON.execute("ALTER TABLE deposits ADD COLUMN starting_time INTEGER;")
-
-    CON.commit()
 
     DEX: str = network['DEX']
-    BOT: str = 'dca'
 
     res = CON.execute(
-        "SELECT * FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ? AND contract_instance = ?\
-        AND ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ? AND contract_instance = ?);",
-        (NETWORK_NAME, DEX, BOT, dca_bot_address, NETWORK_NAME, DEX, BOT, dca_bot_address)
+        "SELECT * FROM fetched_blocks WHERE ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ? AND contract_instance = ?);",
+        (NETWORK_NAME, DEX, BOT, dca_bot_address)
     )
-
-
     from_block: int = 0
     result: tuple = res.fetchone()
     if result is None:
-        DEX: str = network['DEX']
-        BOT: str = 'dca'
-
         data = (FROM_BLOCK - 1, NETWORK_NAME, DEX, BOT, dca_bot_address)
         CON.execute(
             "INSERT INTO fetched_blocks (block_number, network_name, dex, bot, contract_instance) VALUES (?, ?, ?, ?, ?);", data
@@ -122,52 +76,71 @@ async def pancakeswap_bot(network):
         CON.commit()
         from_block = int(FROM_BLOCK)
     else:
-        incremented_block = int(result[0]) + 1
+        incremented_block = int(result[1]) + 1
         from_block = int(FROM_BLOCK) if incremented_block < int(FROM_BLOCK) else incremented_block
 
     BLOCK_NUMBER: int = int(w3.eth.get_block_number())
-    dca_sc: Contract = w3.eth.contract(
-        address=dca_bot_address, abi=dca_bot_abi)
+    dca_sc: Contract = w3.eth.contract(address=dca_bot_address, abi=dca_bot_abi)
     i: int = from_block
     while i <= BLOCK_NUMBER:
         to_block: int = i + 9999
         if to_block > BLOCK_NUMBER:
             to_block = BLOCK_NUMBER
-        deposit_logs = dca_sc.events.Deposited\
-            .getLogs(fromBlock=i, toBlock=to_block)
+        deposit_logs = dca_sc.events.Deposited.getLogs(fromBlock=i, toBlock=to_block)
 
         # Acquire an exclusive lock on the database
         CON.execute("BEGIN EXCLUSIVE;")
 
         try:
             for log in deposit_logs:
-                swap_id: int = int(log.args.swap_id)
+                deposit_id: int = int(log.args.deposit_id)
                 token0: str = log.args.token0
                 token1: str = log.args.token1
-                input_amount: str = log.args.input_amount
+                input_amount: str = str(log.args.input_amount)
                 number_trades: int = int(log.args.number_trades)
                 interval: int = int(log.args.interval)
                 starting_time: int = int(log.args.starting_time)
                 remaining_counts: int = int(log.args.number_trades)
                 depositor: str = log.args.depositor
-                data: tuple = (swap_id, token0, token1, input_amount, 0, depositor,
-                               number_trades, interval, starting_time,
-                               remaining_counts, NETWORK_NAME, DEX, 'dca', dca_bot_address)
-
+                if token0 not in price.keys():
+                    if token0 == VETH:
+                        url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
+                        headers = {"Content-Type": "application/json"}
+                        params = {
+                            'ids': COINGECKO_CHAIN_ID,
+                            'vs_currencies': 'usd',
+                            'x_cg_pro_api_key': COINGECKO_API_KEY
+                        }
+                        response: requests.Response = requests.get(url, params=params, headers=headers)
+                        result = response.json()
+                        price[token0] = result[list(result)[0]]['usd']
+                    else:
+                        url: str = "https://pro-api.coingecko.com/api/v3/simple/token_price/" + COINGECKO_CHAIN_ID
+                        headers = {"Content-Type": "application/json"}
+                        params = {
+                            'contract_addresses': token0,
+                            'vs_currencies': 'usd',
+                            'x_cg_pro_api_key': COINGECKO_API_KEY
+                        }
+                        response: requests.Response = requests.get(url, params=params, headers=headers)
+                        result = response.json()
+                        price[token0] = result[list(result)[0]]['usd']
+                data: tuple = (deposit_id, token0, token1, input_amount, depositor,
+                               number_trades, remaining_counts, interval, starting_time,
+                               price[token0], NETWORK_NAME, DEX, BOT, dca_bot_address)
                 cursor = CON.cursor()
                 cursor.execute(
                     "SELECT COUNT(*) FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
-                    (swap_id, NETWORK_NAME, DEX, 'dca', dca_bot_address)
-                )
+                    (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
                 result = cursor.fetchone()
 
                 if result[0] == 0:
                     CON.execute(
-                        "INSERT INTO deposits (deposit_id, token0, token1, amount0, amount1, depositor, number_trades, interval, starting_time, remaining_counts, network_name, dex_name, bot, contract) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                        "INSERT INTO deposits (deposit_id, token0, token1, amount0, depositor, number_trades, remaining_counts, interval, starting_time, deposit_price, network_name, dex_name, bot, contract) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                         data)
 
-                    mp.track(str(swap_id), 'bot-add', {
-                        'bot': 'dca',
+                    mp.track(str(deposit_id), 'bot-add', {
+                        'bot': BOT,
                         'dex': DEX,
                         'network': NETWORK_NAME
                     })
@@ -183,18 +156,44 @@ async def pancakeswap_bot(network):
         finally:
             CON.commit()
 
-        swapped_logs = dca_sc.events.Swapped\
-            .getLogs(fromBlock=i, toBlock=to_block)
+        swapped_logs = dca_sc.events.Swapped.getLogs(fromBlock=i, toBlock=to_block)
         for log in swapped_logs:
-            swap_id: int = int(log.args.swap_id)
+            deposit_id: int = int(log.args.deposit_id)
             remaining_counts: int = int(log.args.remaining_counts)
-            data: tuple = (remaining_counts, swap_id, remaining_counts, NETWORK_NAME, DEX, 'dca', dca_bot_address)
-            CON.execute(
-                "UPDATE deposits SET remaining_counts = ? WHERE swap_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
-                data)
-
+            block_number: int = int(log.blockNumber)
+            cursor = CON.execute("SELECT token0 FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
+            result = cursor.fetchone()
+            token0 = str(result[0])
+            if token0 not in price.keys():
+                if token0 == VETH:
+                    url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
+                    headers = {"Content-Type": "application/json"}
+                    params = {
+                        'ids': COINGECKO_CHAIN_ID,
+                        'vs_currencies': 'usd',
+                        'x_cg_pro_api_key': COINGECKO_API_KEY
+                    }
+                    response: requests.Response = requests.get(url, params=params, headers=headers)
+                    result = response.json()
+                    price[token0] = result[list(result)[0]]['usd']
+                else:
+                    url: str = "https://pro-api.coingecko.com/api/v3/simple/token_price/" + COINGECKO_CHAIN_ID
+                    headers = {"Content-Type": "application/json"}
+                    params = {
+                        'contract_addresses': token0,
+                        'vs_currencies': 'usd',
+                        'x_cg_pro_api_key': COINGECKO_API_KEY
+                    }
+                    response: requests.Response = requests.get(url, params=params, headers=headers)
+                    result = response.json()
+                    price[token0] = result[list(result)[0]]['usd']
+            data: tuple = (remaining_counts, price[token0], deposit_id, remaining_counts, NETWORK_NAME, DEX, BOT, dca_bot_address)
+            CON.execute("UPDATE deposits SET remaining_counts = ?, tracking_price = ? WHERE deposit_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
+            if remaining_counts == 0:
+                data: tuple = (block_number, deposit_id, remaining_counts, NETWORK_NAME, DEX, BOT, dca_bot_address)
+                CON.execute("UPDATE deposits SET withdraw_block = ? WHERE deposit_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
             try:
-                botInfo = await getBot(swap_id, dca_bot_address)
+                botInfo = await getBot(deposit_id, dca_bot_address)
                 tokenName = await getBotName(botInfo[1])
                 if botInfo:
                     params = {
@@ -209,15 +208,54 @@ async def pancakeswap_bot(network):
                 print("Telegram alert error occurred:", str(e))
 
         CON.commit()
+        canceled_logs = dca_sc.events.Canceled.getLogs(fromBlock=i, toBlock=to_block)
+        for log in canceled_logs:
+            deposit_id: int = int(log.args.deposit_id)
+            block_number: int = int(log.blockNumber)
+            cursor = CON.execute("SELECT token0 FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
+            result = cursor.fetchone()
+            token0 = str(result[0])
+            if token0 not in price.keys():
+                if token0 == VETH:
+                    url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
+                    headers = {"Content-Type": "application/json"}
+                    params = {
+                        'ids': COINGECKO_CHAIN_ID,
+                        'vs_currencies': 'usd',
+                        'x_cg_pro_api_key': COINGECKO_API_KEY
+                    }
+                    response: requests.Response = requests.get(url, params=params, headers=headers)
+                    result = response.json()
+                    price[token0] = result[list(result)[0]]['usd']
+                else:
+                    url: str = "https://pro-api.coingecko.com/api/v3/simple/token_price/" + COINGECKO_CHAIN_ID
+                    headers = {"Content-Type": "application/json"}
+                    params = {
+                        'contract_addresses': token0,
+                        'vs_currencies': 'usd',
+                        'x_cg_pro_api_key': COINGECKO_API_KEY
+                    }
+                    response: requests.Response = requests.get(url, params=params, headers=headers)
+                    result = response.json()
+                    price[token0] = result[list(result)[0]]['usd']
+            data: tuple = (block_number, 0, price[token0], deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address)
+            CON.execute("UPDATE deposits SET withdraw_block = ?, remaining_counts = ?, tracking_price = ? WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
+        CON.commit()
         i += 10000
-    data: tuple = (NETWORK_NAME, DEX, 'dca', dca_bot_address)
-    res = CON.execute(
-        "SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
-        data)
+    data = (BLOCK_NUMBER, NETWORK_NAME, DEX, BOT, dca_bot_address)
+    CON.execute(
+        "UPDATE fetched_blocks SET block_number = ? WHERE network_name = ? AND dex = ? AND bot = ? AND contract_instance = ?;", data
+    )
+    CON.commit()
+    data: tuple = (NETWORK_NAME, DEX, BOT, dca_bot_address)
+    res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
     results = res.fetchall()
     current_time: int = int(time.time())
+    deposit_ids = []
+    remaining_countlist = []
+    dca_cw = network['CW']
     for result in results:
-        swap_id = int(result[0])
+        deposit_id = int(result[0])
         number_trades = int(result[1])
         interval = int(result[2])
         starting_time = int(result[3])
@@ -225,23 +263,47 @@ async def pancakeswap_bot(network):
         depositor = result[5]
         try:
             if starting_time + interval * (number_trades - remaining_counts) <= current_time:
-                amount_out_min = dca_sc.functions.swap(swap_id, 0).call({"from": depositor})
-                dca_cw = network['CW']
-                tx = await WALLET.create_and_sign_tx(CreateTxOptions(msgs=[
-                    MsgExecuteContract(WALLET.key.acc_address, dca_cw, {
-                        "swap": {
-                            "swap_id": str(swap_id),
-                            "amount_out_min": str(amount_out_min),
-                            "number_trades": str(number_trades)
-                        }
-                    }, Coins())
-                ]))
-                PALOMA.tx.broadcast_sync(tx)
+                deposit_ids.append(deposit_id)
+                remaining_countlist.append(remaining_counts)
+                if len(deposit_ids) >= MAX_SIZE:
+                    amount_out_min = dca_sc.functions.multiple_swap_view(deposit_ids, remaining_countlist).call()
+                    deposits = []
+                    i = 0
+                    for deposit_id in deposit_ids:
+                        deposits.append({"deposit_id": int(deposit_id), "remaining_count": int(remaining_countlist[i]), "amount_out_min": str(int(int(amount_out_min[i]) * (DENOMINATOR - SLIPPAGE) / DENOMINATOR))})
+                        i += 1
+                    tx = await WALLET.create_and_sign_tx(CreateTxOptions(msgs=[
+                        MsgExecuteContract(WALLET.key.acc_address, dca_cw, {
+                            "put_swap": {
+                                "deposits": deposits
+                            }
+                        }, Coins())
+                    ]))
+                    result = await PALOMA.tx.broadcast_sync(tx)
+                    time.sleep(6)
+                    deposit_ids = []
+                    remaining_countlist = []
         except Exception as e:
             print("An error occurred:", str(e))
 
-            #print(result)
-    return inner()
+    if len(deposit_ids) > 0:
+        amount_out_min = dca_sc.functions.multiple_swap_view(deposit_ids, remaining_countlist).call()
+        deposits = []
+        i = 0
+        for deposit_id in deposit_ids:
+            deposits.append({"deposit_id": int(deposit_id), "remaining_count": int(remaining_countlist[i]), "amount_out_min": str(int(int(amount_out_min[i]) * (DENOMINATOR - SLIPPAGE) / DENOMINATOR))})
+            i += 1
+        tx = await WALLET.create_and_sign_tx(CreateTxOptions(msgs=[
+            MsgExecuteContract(WALLET.key.acc_address, dca_cw, {
+                "put_swap": {
+                    "deposits": deposits
+                }
+            }, Coins())
+        ]))
+        result = await PALOMA.tx.broadcast_sync(tx)
+        time.sleep(6)
+    return await inner()
+
 
 async def getBot(deposit_id, dca_bot_address):
     CON: Connection = sqlite3.connect(DB_PATH)
@@ -253,6 +315,7 @@ async def getBot(deposit_id, dca_bot_address):
         return result
     else:
         return None
+
 
 async def getBotName(tokenAddress):
     try:
@@ -283,16 +346,20 @@ async def getBotName(tokenAddress):
 
 
 async def main():
-    load_dotenv()
-
+    global price
     # Load JSON
     with open("networks.json") as f:
         networks = json.load(f)
 
-    # Cycle through networks
     while True:
-        for network in networks:
-            await pancakeswap_bot(network)
+        price = {}
+        try:
+            # Cycle through networks
+            for network in networks:
+                await dca_bot(network)
+        except KeyboardInterrupt:
+            break
+        time.sleep(1)
 
 
 if __name__ == "__main__":
