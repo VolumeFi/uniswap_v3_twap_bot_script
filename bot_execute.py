@@ -266,7 +266,7 @@ async def dca_bot(network):
                 deposit_ids.append(deposit_id)
                 remaining_countlist.append(remaining_counts)
                 if len(deposit_ids) >= MAX_SIZE:
-                    amount_out_min = dca_sc.functions.multiple_swap_view(deposit_ids, remaining_countlist).call()
+                    amount_out_min = dca_sc.functions.multiple_swap_view(deposit_ids, remaining_countlist).call({"from": "0x0000000000000000000000000000000000000000"})
                     deposits = []
                     i = 0
                     for deposit_id in deposit_ids:
@@ -287,7 +287,7 @@ async def dca_bot(network):
             print("An error occurred:", str(e))
 
     if len(deposit_ids) > 0:
-        amount_out_min = dca_sc.functions.multiple_swap_view(deposit_ids, remaining_countlist).call()
+        amount_out_min = dca_sc.functions.multiple_swap_view(deposit_ids, remaining_countlist).call({"from": "0x0000000000000000000000000000000000000000"})
         deposits = []
         i = 0
         for deposit_id in deposit_ids:
