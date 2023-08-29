@@ -3,20 +3,6 @@
     "NODE": "",
     "ABI": "[]",
     "ADDRESS": "",
-    "JOB_ID": "pancakev2dcajob00",
-    "CHAIN_TYPE": "evm",
-    "CHAIN_REFERENCE_ID": "bnb-main",
-    "COINGECKO_CHAIN_ID": "binance-smart-chain",
-    "NETWORK_NAME": "BSC",
-    "WETH": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
-    "FROM_BLOCK": 0,
-    "CW": "paloma1",
-    "DEX": "pancakeswapv2"
-  },
-  {
-    "NODE": "",
-    "ABI": "[]",
-    "ADDRESS": "",
     "JOB_ID": "univ2dcajob0",
     "CHAIN_TYPE": "evm",
     "CHAIN_REFERENCE_ID": "eth-main",
@@ -26,5 +12,19 @@
     "FROM_BLOCK": 0,
     "CW": "paloma1",
     "DEX": "uniswapv2"
+  },
+  {
+    "NODE": "",
+    "ABI": "[]",
+    "ADDRESS": "",
+    "JOB_ID": "pancakev2dcajob00",
+    "CHAIN_TYPE": "evm",
+    "CHAIN_REFERENCE_ID": "bnb-main",
+    "COINGECKO_CHAIN_ID": "binance-smart-chain",
+    "NETWORK_NAME": "BSC",
+    "WETH": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+    "FROM_BLOCK": 0,
+    "CW": "paloma1",
+    "DEX": "pancakeswapv2"
   }
 ]
