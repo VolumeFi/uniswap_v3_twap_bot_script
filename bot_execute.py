@@ -5,6 +5,8 @@ import json
 import sqlite3
 import time
 import requests
+import sentry_sdk
+
 from sqlite3 import Connection
 from web3 import Web3
 from web3.contract import Contract
@@ -15,6 +17,15 @@ from paloma_sdk.client.lcd.api.tx import CreateTxOptions
 from paloma_sdk.core.wasm import MsgExecuteContract
 from paloma_sdk.core.coins import Coins
 from mixpanel import Mixpanel
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn="https://955ac0a74d244e2c914767a351d4d069@o1200162.ingest.sentry.io/4505082653573120",
+    # Set traces_sample_rate to 1.0 to capture 100%
+    # of transactions for performance monitoring.
+    # We recommend adjusting this value in production.
+    traces_sample_rate=1.0,
+)
 
 load_dotenv()
 mp = Mixpanel('eaae482845dadd88e1ce07b9fa03dd6b')
