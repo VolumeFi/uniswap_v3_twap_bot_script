@@ -53,6 +53,7 @@ async def dca_bot(network):
     DEX: str = network['DEX']
     NETWORK_NAME: str = network['NETWORK_NAME']
     COINGECKO_CHAIN_ID: str = network['COINGECKO_CHAIN_ID']
+    COINGECKO_COIN_ID: str = network['COINGECKO_COIN_ID']
     CON: Connection = sqlite3.connect(DB_PATH)
     PALOMA: AsyncLCDClient = AsyncLCDClient(url=PALOMA_LCD, chain_id=PALOMA_CHAIN_ID)
     PALOMA.gas_prices = "0.01ugrain"
@@ -107,7 +108,7 @@ async def dca_bot(network):
                         url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
                         headers = {"Content-Type": "application/json"}
                         params = {
-                            'ids': COINGECKO_CHAIN_ID,
+                            'ids': COINGECKO_COIN_ID,
                             'vs_currencies': 'usd',
                             'x_cg_pro_api_key': COINGECKO_API_KEY
                         }
@@ -169,7 +170,7 @@ async def dca_bot(network):
                     url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
                     headers = {"Content-Type": "application/json"}
                     params = {
-                        'ids': COINGECKO_CHAIN_ID,
+                        'ids': COINGECKO_COIN_ID,
                         'vs_currencies': 'usd',
                         'x_cg_pro_api_key': COINGECKO_API_KEY
                     }
@@ -220,7 +221,7 @@ async def dca_bot(network):
                     url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
                     headers = {"Content-Type": "application/json"}
                     params = {
-                        'ids': COINGECKO_CHAIN_ID,
+                        'ids': COINGECKO_COIN_ID,
                         'vs_currencies': 'usd',
                         'x_cg_pro_api_key': COINGECKO_API_KEY
                     }
