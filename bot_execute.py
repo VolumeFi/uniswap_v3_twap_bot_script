@@ -71,6 +71,7 @@ async def dca_bot(network):
     ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
     WALLET = PALOMA.wallet(ACCT)
     BOT_NAME = re.sub(r'v\d+$', '', DEX)
+    BOT = re.sub(r'v\d+$', '', DEX)
     # Create Tables
 
     DEX: str = network['DEX']
