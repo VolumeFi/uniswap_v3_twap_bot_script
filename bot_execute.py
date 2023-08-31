@@ -5,7 +5,7 @@ import json
 import sqlite3
 import time
 import requests
-import sentry_sdk
+import re
 
 from sqlite3 import Connection
 from web3 import Web3
@@ -70,6 +70,7 @@ async def dca_bot(network):
     PALOMA.gas_prices = "0.01ugrain"
     ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
     WALLET = PALOMA.wallet(ACCT)
+    BOT_NAME = re.sub(r'v\d+$', '', DEX)
     # Create Tables
 
     DEX: str = network['DEX']
