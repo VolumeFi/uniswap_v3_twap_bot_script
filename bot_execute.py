@@ -96,79 +96,63 @@ async def dca_bot(network):
     BLOCK_NUMBER: int = int(w3.eth.get_block_number())
     dca_sc: Contract = w3.eth.contract(address=dca_bot_address, abi=dca_bot_abi)
     i: int = from_block
+    batch_sql = []
     while i <= BLOCK_NUMBER:
         to_block: int = i + 9999
         if to_block > BLOCK_NUMBER:
             to_block = BLOCK_NUMBER
         deposit_logs = dca_sc.events.Deposited.getLogs(fromBlock=i, toBlock=to_block)
-
-        # Acquire an exclusive lock on the database
-        CON.execute("BEGIN EXCLUSIVE;")
-
-        try:
-            for log in deposit_logs:
-                deposit_id: int = int(log.args.deposit_id)
-                token0: str = log.args.token0
-                token1: str = log.args.token1
-                input_amount: str = str(log.args.input_amount)
-                number_trades: int = int(log.args.number_trades)
-                interval: int = int(log.args.interval)
-                starting_time: int = int(log.args.starting_time)
-                remaining_counts: int = int(log.args.number_trades)
-                depositor: str = log.args.depositor
-                if token0 not in price.keys():
-                    if token0 == VETH:
-                        url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
-                        headers = {"Content-Type": "application/json"}
-                        params = {
-                            'ids': COINGECKO_COIN_ID,
-                            'vs_currencies': 'usd',
-                            'x_cg_pro_api_key': COINGECKO_API_KEY
-                        }
-                        response: requests.Response = requests.get(url, params=params, headers=headers)
-                        result = response.json()
-                        price[token0] = result[list(result)[0]]['usd']
-                    else:
-                        url: str = "https://pro-api.coingecko.com/api/v3/simple/token_price/" + COINGECKO_CHAIN_ID
-                        headers = {"Content-Type": "application/json"}
-                        params = {
-                            'contract_addresses': token0,
-                            'vs_currencies': 'usd',
-                            'x_cg_pro_api_key': COINGECKO_API_KEY
-                        }
-                        response: requests.Response = requests.get(url, params=params, headers=headers)
-                        result = response.json()
-                        price[token0] = result[list(result)[0]]['usd']
-                data: tuple = (deposit_id, token0, token1, input_amount, depositor,
-                               number_trades, remaining_counts, interval, starting_time,
-                               price[token0], NETWORK_NAME, DEX, BOT, dca_bot_address)
-                cursor = CON.cursor()
-                cursor.execute(
-                    "SELECT COUNT(*) FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
-                    (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
-                result = cursor.fetchone()
-
-                if result[0] == 0:
-                    CON.execute(
-                        "INSERT INTO deposits (deposit_id, token0, token1, amount0, depositor, number_trades, remaining_counts, interval, starting_time, deposit_price, network_name, dex_name, bot, contract) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                        data)
-
-                    mp.track(str(deposit_id), 'bot-add', {
-                        'bot': BOT,
-                        'dex': DEX,
-                        'network': NETWORK_NAME
-                    })
+        for log in deposit_logs:
+            deposit_id: int = int(log.args.deposit_id)
+            token0: str = log.args.token0
+            token1: str = log.args.token1
+            input_amount: str = str(log.args.input_amount)
+            number_trades: int = int(log.args.number_trades)
+            interval: int = int(log.args.interval)
+            starting_time: int = int(log.args.starting_time)
+            remaining_counts: int = int(log.args.number_trades)
+            depositor: str = log.args.depositor
+            if token0 not in price.keys():
+                if token0 == VETH:
+                    url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
+                    headers = {"Content-Type": "application/json"}
+                    params = {
+                        'ids': COINGECKO_COIN_ID,
+                        'vs_currencies': 'usd',
+                        'x_cg_pro_api_key': COINGECKO_API_KEY
+                    }
+                    response: requests.Response = requests.get(url, params=params, headers=headers)
+                    result = response.json()
+                    price[token0] = result[list(result)[0]]['usd']
                 else:
-                    print("Skipping duplicate entry:", data)
+                    url: str = "https://pro-api.coingecko.com/api/v3/simple/token_price/" + COINGECKO_CHAIN_ID
+                    headers = {"Content-Type": "application/json"}
+                    params = {
+                        'contract_addresses': token0,
+                        'vs_currencies': 'usd',
+                        'x_cg_pro_api_key': COINGECKO_API_KEY
+                    }
+                    response: requests.Response = requests.get(url, params=params, headers=headers)
+                    result = response.json()
+                    price[token0] = result[list(result)[0]]['usd']
+            data: tuple = (deposit_id, token0, token1, input_amount, depositor, number_trades, remaining_counts, interval, starting_time, price[token0], NETWORK_NAME, DEX, BOT, dca_bot_address)
+            cursor = CON.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;",
+                (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
+            result = cursor.fetchone()
 
-            CON.commit()
+            if result[0] == 0:
+                sql = "INSERT INTO deposits (deposit_id, token0, token1, amount0, depositor, number_trades, remaining_counts, interval, starting_time, deposit_price, network_name, dex_name, bot, contract) VALUES ({0}, '{1}', '{2}', '{3}', '{4}', {5}, {6}, {7}, {8}, {9}, '{10}', '{11}', '{12}', '{13}');".format(deposit_id, token0, token1, input_amount, depositor, number_trades, remaining_counts, interval, starting_time, price[token0], NETWORK_NAME, DEX, BOT, dca_bot_address)
+                batch_sql.append(sql)
 
-        except:
-            CON.rollback()
-            raise
-
-        finally:
-            CON.commit()
+                mp.track(str(deposit_id), 'bot-add', {
+                    'bot': BOT,
+                    'dex': DEX,
+                    'network': NETWORK_NAME
+                })
+            else:
+                print("Skipping duplicate entry:", data)
 
         swapped_logs = dca_sc.events.Swapped.getLogs(fromBlock=i, toBlock=to_block)
         for log in swapped_logs:
@@ -201,11 +185,11 @@ async def dca_bot(network):
                     response: requests.Response = requests.get(url, params=params, headers=headers)
                     result = response.json()
                     price[token0] = result[list(result)[0]]['usd']
-            data: tuple = (remaining_counts, price[token0], deposit_id, remaining_counts, NETWORK_NAME, DEX, BOT, dca_bot_address)
-            CON.execute("UPDATE deposits SET remaining_counts = ?, tracking_price = ? WHERE deposit_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
+            sql = "UPDATE deposits SET remaining_counts = {0}, tracking_price = {1} WHERE deposit_id = {2} AND remaining_counts > {3} AND network_name = '{4}' AND dex_name = '{5}' AND bot = '{6}' AND contract = '{7}';".format(remaining_counts, price[token0], deposit_id, remaining_counts, NETWORK_NAME, DEX, BOT, dca_bot_address)
+            batch_sql.append(sql)
             if remaining_counts == 0:
-                data: tuple = (block_number, deposit_id, remaining_counts, NETWORK_NAME, DEX, BOT, dca_bot_address)
-                CON.execute("UPDATE deposits SET withdraw_block = ? WHERE deposit_id = ? AND remaining_counts > ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
+                sql = "UPDATE deposits SET withdraw_block = {0} WHERE deposit_id = {1} AND remaining_counts > {2} AND network_name = '{3}' AND dex_name = '{4}' AND bot = '{5}' AND contract = '{6}';".format(block_number, deposit_id, remaining_counts, NETWORK_NAME, DEX, BOT, dca_bot_address)
+                batch_sql.append(sql)
             try:
                 botInfo = await getBot(deposit_id, dca_bot_address)
                 tokenName = await getBotName(botInfo[1])
@@ -221,7 +205,6 @@ async def dca_bot(network):
             except Exception as e:
                 print("Telegram alert error occurred:", str(e))
 
-        CON.commit()
         canceled_logs = dca_sc.events.Canceled.getLogs(fromBlock=i, toBlock=to_block)
         for log in canceled_logs:
             deposit_id: int = int(log.args.deposit_id)
@@ -252,15 +235,22 @@ async def dca_bot(network):
                     response: requests.Response = requests.get(url, params=params, headers=headers)
                     result = response.json()
                     price[token0] = result[list(result)[0]]['usd']
-            data: tuple = (block_number, 0, price[token0], deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address)
-            CON.execute("UPDATE deposits SET withdraw_block = ?, remaining_counts = ?, tracking_price = ? WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
-        CON.commit()
+            sql = "UPDATE deposits SET withdraw_block = {0}, remaining_counts = {1}, tracking_price = {2} WHERE deposit_id = {3} AND network_name = '{4}' AND dex_name = '{5}' AND bot = '{6}' AND contract = '{7}';".format(block_number, 0, price[token0], deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address)
+            batch_sql.append(sql)
         i += 10000
-    data = (BLOCK_NUMBER, NETWORK_NAME, DEX, BOT, dca_bot_address)
-    CON.execute(
-        "UPDATE fetched_blocks SET block_number = ? WHERE network_name = ? AND dex = ? AND bot = ? AND contract_instance = ?;", data
-    )
-    CON.commit()
+    sql = "UPDATE fetched_blocks SET block_number = {0} WHERE network_name = '{1}' AND dex = '{2}' AND bot = '{3}' AND contract_instance = '{4}';".format(BLOCK_NUMBER, NETWORK_NAME, DEX, BOT, dca_bot_address)
+    batch_sql.append(sql)
+
+    try:
+        CON.execute("BEGIN;")
+        for query in batch_sql:
+            CON.execute(query)
+    except:
+        CON.rollback()
+        raise
+    finally:
+        CON.commit()
+
     data: tuple = (NETWORK_NAME, DEX, BOT, dca_bot_address)
     res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
     results = res.fetchall()
