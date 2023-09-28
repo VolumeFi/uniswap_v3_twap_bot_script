@@ -11,7 +11,7 @@ from sqlite3 import Connection
 from web3 import Web3
 from web3.contract import Contract
 from dotenv import load_dotenv
-from paloma_sdk.client.lcd import AsyncLCDClient
+from paloma_sdk.client.lcd import AsyncLCDClient, AsyncWallet
 from paloma_sdk.key.mnemonic import MnemonicKey
 from paloma_sdk.client.lcd.api.tx import CreateTxOptions
 from paloma_sdk.core.wasm import MsgExecuteContract
@@ -49,9 +49,12 @@ REMAINING = 3  # For DCA bot type.
 
 price = {}
 
+paloma_lcd_client: AsyncLCDClient = None
+paloma_wallet: AsyncWallet = None
+
 
 async def dca_bot(network):
-    global price
+    global price, paloma_lcd_client, paloma_wallet
 
     async def inner():
         await asyncio.sleep(6)
@@ -66,10 +69,11 @@ async def dca_bot(network):
     COINGECKO_CHAIN_ID: str = network['COINGECKO_CHAIN_ID']
     COINGECKO_COIN_ID: str = network['COINGECKO_COIN_ID']
     CON: Connection = sqlite3.connect(DB_PATH)
-    PALOMA: AsyncLCDClient = AsyncLCDClient(url=PALOMA_LCD, chain_id=PALOMA_CHAIN_ID)
-    PALOMA.gas_prices = "0.01ugrain"
-    ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
-    WALLET = PALOMA.wallet(ACCT)
+    if paloma_lcd_client is None or paloma_wallet is None:
+        paloma_lcd_client = AsyncLCDClient(url=PALOMA_LCD, chain_id=PALOMA_CHAIN_ID)
+        paloma_lcd_client.gas_prices = "0.01ugrain"
+        ACCT: MnemonicKey = MnemonicKey(mnemonic=MNEMONIC)
+        paloma_wallet = paloma_lcd_client.wallet(ACCT)
     BOT_NAME = re.sub(r'v\d+$', '', DEX)
 
     # Create Tables
@@ -276,14 +280,14 @@ async def dca_bot(network):
                     for deposit_id in deposit_ids:
                         deposits.append({"deposit_id": int(deposit_id), "remaining_count": int(remaining_countlist[i]), "amount_out_min": str(int(int(amount_out_min[i]) * (DENOMINATOR - SLIPPAGE) / DENOMINATOR))})
                         i += 1
-                    tx = await WALLET.create_and_sign_tx(CreateTxOptions(msgs=[
-                        MsgExecuteContract(WALLET.key.acc_address, dca_cw, {
+                    tx = await paloma_wallet.create_and_sign_tx(CreateTxOptions(msgs=[
+                        MsgExecuteContract(paloma_wallet.key.acc_address, dca_cw, {
                             "put_swap": {
                                 "deposits": deposits
                             }
                         }, Coins())
                     ]))
-                    result = await PALOMA.tx.broadcast_sync(tx)
+                    result = await paloma_lcd_client.tx.broadcast_sync(tx)
                     time.sleep(6)
                     deposit_ids = []
                     remaining_countlist = []
@@ -297,14 +301,14 @@ async def dca_bot(network):
         for deposit_id in deposit_ids:
             deposits.append({"deposit_id": int(deposit_id), "remaining_count": int(remaining_countlist[i]), "amount_out_min": str(int(int(amount_out_min[i]) * (DENOMINATOR - SLIPPAGE) / DENOMINATOR))})
             i += 1
-        tx = await WALLET.create_and_sign_tx(CreateTxOptions(msgs=[
-            MsgExecuteContract(WALLET.key.acc_address, dca_cw, {
+        tx = await paloma_wallet.create_and_sign_tx(CreateTxOptions(msgs=[
+            MsgExecuteContract(paloma_wallet.key.acc_address, dca_cw, {
                 "put_swap": {
                     "deposits": deposits
                 }
             }, Coins())
         ]))
-        result = await PALOMA.tx.broadcast_sync(tx)
+        result = await paloma_lcd_client.tx.broadcast_sync(tx)
         time.sleep(6)
     return await inner()
 
