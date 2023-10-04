@@ -245,14 +245,8 @@ async def dca_bot(network):
     sql = "UPDATE fetched_blocks SET block_number = {0} WHERE network_name = '{1}' AND dex = '{2}' AND bot = '{3}' AND contract_instance = '{4}';".format(BLOCK_NUMBER, NETWORK_NAME, DEX, BOT, dca_bot_address)
     batch_sql.append(sql)
 
-    try:
-        CON.execute("BEGIN;")
-        for query in batch_sql:
-            CON.execute(query)
-    except:
-        CON.rollback()
-        raise
-    finally:
+    for query in batch_sql:
+        CON.execute(query)
         CON.commit()
 
     data: tuple = (NETWORK_NAME, DEX, BOT, dca_bot_address)
