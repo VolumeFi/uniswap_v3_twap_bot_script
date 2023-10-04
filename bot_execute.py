@@ -247,6 +247,7 @@ async def dca_bot(network):
 
     for query in batch_sql:
         CON.execute(query)
+        CON.commit()
 
     data: tuple = (NETWORK_NAME, DEX, BOT, dca_bot_address)
     res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
