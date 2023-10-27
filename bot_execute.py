@@ -7,6 +7,7 @@ import time
 import requests
 import re
 
+from aiohttp import web
 from sqlite3 import Connection
 from web3 import Web3
 from web3.contract import Contract
@@ -347,22 +348,34 @@ async def getBotName(tokenAddress):
         print("Get bot info error occurred:", str(e))
 
 
+async def handle(request):
+    return web.Response(text="true")
+
+async def web_server():
+    app = web.Application()
+    app.router.add_get('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, 'localhost', 8080)
+    await site.start()
+
 async def main():
     global price
     # Load JSON
     with open("networks.json") as f:
         networks = json.load(f)
 
-    while True:
-        price = {}
-        try:
-            # Cycle through networks
-            for network in networks:
-                await dca_bot(network)
-        except KeyboardInterrupt:
-            break
-        time.sleep(1)
+    async def worker():
+        while True:
+            price = {}
+            try:
+                for network in networks:
+                    await dca_bot(network)
+            except KeyboardInterrupt:
+                break
+            await asyncio.sleep(1)
 
+    await asyncio.gather(worker(), web_server())
 
 if __name__ == "__main__":
     uvloop.install()
