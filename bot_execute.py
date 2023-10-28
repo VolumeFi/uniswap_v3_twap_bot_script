@@ -250,6 +250,9 @@ async def dca_bot(network):
         CON.execute(query)
         CON.commit()
 
+    CON.execute("PRAGMA busy_timeout = 5000")
+    CON.execute("PRAGMA journal_mode = WAL")
+
     data: tuple = (NETWORK_NAME, DEX, BOT, dca_bot_address)
     res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
     results = res.fetchall()
