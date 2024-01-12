@@ -37,6 +37,7 @@ TELEGRAM_ALERT_API = os.environ['TELEGRAM_ALERT_API']
 MNEMONIC: str = os.environ['PALOMA_KEY']
 DB_PATH = os.environ['DB_PATH']
 SLIPPAGE = int(os.environ['SLIPPAGE'])
+SLIPPAGE_STABLE = int(os.environ['SLIPPAGE_STABLE'])
 COINGECKO_API_KEY = os.environ['COINGECKO_API_KEY']
 DENOMINATOR = 10000
 BOT: str = 'dca'
@@ -117,6 +118,7 @@ async def dca_bot(network):
             starting_time: int = int(log.args.starting_time)
             remaining_counts: int = int(log.args.number_trades)
             depositor: str = log.args.depositor
+            is_stable_swap: bool = bool(log.args.is_stable_swap)
             if token0 not in price.keys():
                 if token0 == VETH:
                     url: str = "https://pro-api.coingecko.com/api/v3/simple/price"
@@ -148,7 +150,7 @@ async def dca_bot(network):
             result = cursor.fetchone()
 
             if result[0] == 0:
-                sql = "INSERT INTO deposits (deposit_id, token0, token1, amount0, depositor, number_trades, remaining_counts, interval, starting_time, deposit_price, network_name, dex_name, bot, contract) VALUES ({0}, '{1}', '{2}', '{3}', '{4}', {5}, {6}, {7}, {8}, {9}, '{10}', '{11}', '{12}', '{13}');".format(deposit_id, token0, token1, input_amount, depositor, number_trades, remaining_counts, interval, starting_time, price[token0], NETWORK_NAME, DEX, BOT, dca_bot_address)
+                sql = "INSERT INTO deposits (deposit_id, token0, token1, amount0, depositor, number_trades, remaining_counts, interval, starting_time, deposit_price, network_name, dex_name, bot, contract, is_stable_swap) VALUES ({0}, '{1}', '{2}', '{3}', '{4}', {5}, {6}, {7}, {8}, {9}, '{10}', '{11}', '{12}', '{13}', {14});".format(deposit_id, token0, token1, input_amount, depositor, number_trades, remaining_counts, interval, starting_time, price[token0], NETWORK_NAME, DEX, BOT, dca_bot_address, is_stable_swap)
                 batch_sql.append(sql)
 
                 mp.track(str(deposit_id), 'bot-add', {
@@ -254,11 +256,12 @@ async def dca_bot(network):
     CON.execute("PRAGMA journal_mode = WAL")
 
     data: tuple = (NETWORK_NAME, DEX, BOT, dca_bot_address)
-    res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
+    res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor, is_stable_swap FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
     results = res.fetchall()
     current_time: int = int(time.time())
     deposit_ids = []
     remaining_countlist = []
+    stable_swaplist = []
     dca_cw = network['CW']
     for result in results:
         deposit_id = int(result[0])
@@ -267,16 +270,21 @@ async def dca_bot(network):
         starting_time = int(result[3])
         remaining_counts = int(result[4])
         depositor = result[5]
+        is_stable_swap = bool(result[6])
         try:
             if starting_time + interval * (number_trades - remaining_counts) <= current_time:
                 deposit_ids.append(deposit_id)
                 remaining_countlist.append(remaining_counts)
+                stable_swaplist.append(is_stable_swap)
                 if len(deposit_ids) >= MAX_SIZE:
                     amount_out_min = dca_sc.functions.multiple_swap_view(deposit_ids, remaining_countlist).call({"from": "0x0000000000000000000000000000000000000000"})
                     deposits = []
                     i = 0
                     for deposit_id in deposit_ids:
-                        deposits.append({"deposit_id": int(deposit_id), "remaining_count": int(remaining_countlist[i]), "amount_out_min": str(int(int(amount_out_min[i]) * (DENOMINATOR - SLIPPAGE) / DENOMINATOR))})
+                        slippage = SLIPPAGE
+                        if stable_swaplist[i]:
+                            slippage = SLIPPAGE_STABLE
+                        deposits.append({"deposit_id": int(deposit_id), "remaining_count": int(remaining_countlist[i]), "amount_out_min": str(int(int(amount_out_min[i]) * (DENOMINATOR - slippage) / DENOMINATOR))})
                         i += 1
                     tx = await paloma_wallet.create_and_sign_tx(CreateTxOptions(msgs=[
                         MsgExecuteContract(paloma_wallet.key.acc_address, dca_cw, {
@@ -289,6 +297,7 @@ async def dca_bot(network):
                     time.sleep(6)
                     deposit_ids = []
                     remaining_countlist = []
+                    stable_swaplist = []
         except Exception as e:
             print("An error occurred:", str(e))
 
@@ -297,7 +306,10 @@ async def dca_bot(network):
         deposits = []
         i = 0
         for deposit_id in deposit_ids:
-            deposits.append({"deposit_id": int(deposit_id), "remaining_count": int(remaining_countlist[i]), "amount_out_min": str(int(int(amount_out_min[i]) * (DENOMINATOR - SLIPPAGE) / DENOMINATOR))})
+            slippage = SLIPPAGE
+            if stable_swaplist[i]:
+                slippage = SLIPPAGE_STABLE
+            deposits.append({"deposit_id": int(deposit_id), "remaining_count": int(remaining_countlist[i]), "amount_out_min": str(int(int(amount_out_min[i]) * (DENOMINATOR - slippage) / DENOMINATOR))})
             i += 1
         tx = await paloma_wallet.create_and_sign_tx(CreateTxOptions(msgs=[
             MsgExecuteContract(paloma_wallet.key.acc_address, dca_cw, {

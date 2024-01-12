@@ -142,6 +142,10 @@ bot TEXT);")
         CON.execute("ALTER TABLE deposits ADD COLUMN bot TEXT;")
     except:
         print("Error while adding column bot")
+    try:
+        CON.execute("ALTER TABLE deposits ADD COLUMN is_stable_swap BOOLEAN;")
+    except:
+        print("Error while adding column is_stable_swap")
 
     CON.execute("CREATE INDEX IF NOT EXISTS deposit_idx ON deposits (deposit_id);")
 
