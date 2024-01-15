@@ -26,15 +26,20 @@ async def dca_bot(network):
     wallet = paloma.wallet(acct)
     payload = ""
     job_id = network['JOB_ID']
+    creator = wallet.key.acc_address
+    signers = [wallet.key.acc_address]
     result = await paloma.job_scheduler.create_job(
         wallet, job_id, dca_bot_address, dca_bot_abi, payload,
-        network['CHAIN_TYPE'], network['CHAIN_REFERENCE_ID'])
+        network['CHAIN_TYPE'], network['CHAIN_REFERENCE_ID'], creator, signers)
     print(result)
-    time.sleep(6)
+    time.sleep(10)
 
     # Instantiate
     initialize_msg = {
-        "job_id": job_id
+        "retry_delay": 60,
+        "job_id": job_id,
+        "creator": creator,
+        "signers": signers,
     }
     code_id = os.environ['CODE_ID']
     funds = Coins()
@@ -53,7 +58,7 @@ async def dca_bot(network):
         )
     )
     result = await paloma.tx.broadcast_sync(tx)
-    time.sleep(6)
+    time.sleep(10)
     print(result)
 
 
