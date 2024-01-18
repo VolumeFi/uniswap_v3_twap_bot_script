@@ -195,7 +195,7 @@ async def dca_bot(network):
             sql = "UPDATE deposits SET remaining_counts = {0}, tracking_price = {1} WHERE deposit_id = {2} AND remaining_counts > {3} AND network_name = '{4}' AND dex_name = '{5}' AND bot = '{6}' AND contract = '{7}';".format(remaining_counts, price[token0], deposit_id, remaining_counts, NETWORK_NAME, DEX, BOT, dca_bot_address)
             batch_sql.append(sql)
             if remaining_counts == 0:
-                sql = "UPDATE deposits SET withdraw_block = {0} WHERE deposit_id = {1} AND remaining_counts > {2} AND network_name = '{3}' AND dex_name = '{4}' AND bot = '{5}' AND contract = '{6}';".format(block_number, deposit_id, remaining_counts, NETWORK_NAME, DEX, BOT, dca_bot_address)
+                sql = "UPDATE deposits SET withdraw_block = {0} WHERE deposit_id = {1} AND network_name = '{2}' AND dex_name = '{3}' AND bot = '{4}' AND contract = '{5}';".format(block_number, deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address)
                 batch_sql.append(sql)
             try:
                 botInfo = await getBot(deposit_id, dca_bot_address)
